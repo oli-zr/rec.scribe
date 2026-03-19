@@ -4,6 +4,7 @@ PrivateScribe is a local-first note-taking and transcription app that runs entir
 
 There is no backend, no build step, and no account setup.
 
+
 ## Features
 
 - Record audio in the browser
@@ -15,11 +16,13 @@ There is no backend, no build step, and no account setup.
 - Play back or delete the original audio file
 - Dark and light theme support
 
+
 ## Browser support
 
 PrivateScribe depends on the File System Access API, so it is intended for Chromium-based browsers such as Chrome, Brave, or Arc.
 
 Safari is not supported.
+
 
 ## Running locally
 
@@ -37,6 +40,7 @@ http://localhost:8080
 
 If you prefer, any other static file server will do.
 
+
 ## How it works
 
 - `index.html` and `style.css` provide the UI
@@ -46,6 +50,7 @@ If you prefer, any other static file server will do.
 - `storage.js` handles the File System Access API and IndexedDB
 
 On first use, the selected Whisper model is downloaded and cached by the browser. After that, transcription can continue without downloading the model again.
+
 
 ## Data storage
 
@@ -59,17 +64,13 @@ PrivateScribe stores data in two places:
 2. **IndexedDB in the browser**
    - stores the handle to the selected working folder so the app can restore it later
 
+
 ## Notes on privacy
 
 Audio, transcripts, and notes stay in your local working folder. The app does not require its own server for transcription.
 
 The only network-dependent part is the initial download of the Whisper model and runtime assets.
 
-## Development
-
-The repository is intentionally simple. Edit the static files, start a local server, and test in the browser.
-
-There are currently no automated tests in the repository.
 
 ## License
 
