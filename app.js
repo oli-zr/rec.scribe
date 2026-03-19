@@ -550,12 +550,23 @@ async function getSystemAudioStream() {
     throw new Error('Dieser Browser unterstützt keine Aufnahme von Tab- oder System-Audio.');
   }
 
-  const displayStream = await getBestSystemAudioDisplayStream();
+  const displayStream = await navigator.mediaDevices.getDisplayMedia({
+    video: true,
+    audio: {
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl: false,
+      suppressLocalAudioPlayback: false,
+    },
+    preferCurrentTab: true,
+    selfBrowserSurface: 'include',
+    systemAudio: 'include',
+  });
 
   const audioTracks = displayStream.getAudioTracks();
   if (audioTracks.length === 0) {
     displayStream.getTracks().forEach(track => track.stop());
-    throw new Error('Kein Audio erkannt. Bitte die gewünschte App bzw. den Bildschirm freigeben und – falls verfügbar – „Systemaudio teilen“ aktivieren.');
+    throw new Error('Kein Audio erkannt. Bitte beim Teilen „Tab-Audio/Systemaudio teilen“ aktivieren.');
   }
 
   const audioStream = new MediaStream(audioTracks);
@@ -568,53 +579,6 @@ async function getSystemAudioStream() {
   });
 
   return audioStream;
-}
-
-
-async function getBestSystemAudioDisplayStream() {
-  const attempts = [
-    {
-      video: true,
-      audio: {
-        echoCancellation: false,
-        noiseSuppression: false,
-        autoGainControl: false,
-        suppressLocalAudioPlayback: false,
-      },
-      systemAudio: 'include',
-      windowAudio: 'system',
-      monitorTypeSurfaces: 'include',
-      selfBrowserSurface: 'include',
-      surfaceSwitching: 'include',
-    },
-    {
-      video: true,
-      audio: true,
-      systemAudio: 'include',
-      windowAudio: 'system',
-      monitorTypeSurfaces: 'include',
-      selfBrowserSurface: 'include',
-      surfaceSwitching: 'include',
-    },
-    {
-      video: true,
-      audio: true,
-    },
-  ];
-
-  let lastError = null;
-  for (const constraints of attempts) {
-    try {
-      return await navigator.mediaDevices.getDisplayMedia(constraints);
-    } catch (error) {
-      lastError = error;
-      if (error?.name !== 'TypeError' && error?.name !== 'OverconstrainedError') {
-        throw error;
-      }
-    }
-  }
-
-  throw lastError || new Error('System-Audio konnte nicht gestartet werden.');
 }
 
 document.getElementById('btn-new-recording').addEventListener('click', openRecordModal);
@@ -642,7 +606,7 @@ function setRecordingSource(source) {
   const hintEl = document.getElementById('record-source-hint');
   if (hintEl) {
     hintEl.textContent = S.recordingSource === 'system'
-      ? 'Wähle im Freigabe-Dialog die YouTube-/Zoom-App als Fenster oder den ganzen Bildschirm und aktiviere – wenn angeboten – „Systemaudio teilen“.'
+      ? 'Browser fragt nach einem Tab/Fenster/Bildschirm. Aktiviere dort „Tab-Audio/Systemaudio teilen“, damit Ton mitgeschnitten wird.'
       : 'Mikrofonaufnahme mit Pegelanzeige.';
   }
 }
@@ -657,7 +621,7 @@ function openRecordModal() {
   recLabelEl.textContent   = 'Bereit zum Aufnehmen';
   recLabelEl.className     = '';
   updateRecordingLevel(0);
-  document.querySelector('.record-modal .modal-sub').textContent = 'Wähle Mikrofon oder Laptop-/App-Audio und starte dann die Aufnahme';
+  document.querySelector('.record-modal .modal-sub').textContent = 'Wähle Mikrofon oder System-Audio und starte dann die Aufnahme';
   titleInput.value         = '';
   setRecordingSource(S.recordingSource);
   syncRecordingSourceControls();
@@ -688,7 +652,7 @@ async function startRecording() {
   } catch (e) {
     const isSystem = S.recordingSource === 'system';
     recLabelEl.textContent = isSystem
-      ? '⚠️ Laptop-/App-Audio konnte nicht gestartet werden'
+      ? '⚠️ System-Audio konnte nicht gestartet werden'
       : '⚠️ Mikrofon-Zugriff verweigert';
     recLabelEl.className   = 'warning';
     if (e?.message) showBanner(e.message, 'warning');
@@ -726,7 +690,7 @@ async function startRecording() {
   recLabelEl.textContent         = '● Aufnahme läuft…';
   recLabelEl.className           = 'recording';
   document.querySelector('.record-modal .modal-sub').textContent = S.recordingSource === 'system'
-    ? 'Teile das App-Fenster oder den Bildschirm mit Audio und stoppe hier, wenn du fertig bist'
+    ? 'Teile einen Tab oder Bildschirm mit Audio und stoppe hier, wenn du fertig bist'
     : 'Drücke erneut zum Stoppen';
 
   recTimerInterval = setInterval(() => {
