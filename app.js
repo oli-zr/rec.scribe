@@ -21,6 +21,7 @@ const S = {
   searchQuery: '',
   sessionFilter: 'all',
   recording:  false,
+  recordingSource: 'microphone',
 };
 
 // Hilfsmethoden
@@ -531,7 +532,84 @@ const RECORDING_MIME_CANDIDATES = [
 ];
 const RECORDING_AUDIO_BITS_PER_SECOND = 24000;
 
+async function getMicrophoneStream() {
+  return navigator.mediaDevices.getUserMedia({
+    audio: {
+      channelCount: 1,
+      sampleRate: 16000,
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+    },
+    video: false,
+  });
+}
+
+async function getSystemAudioStream() {
+  if (!navigator.mediaDevices?.getDisplayMedia) {
+    throw new Error('Dieser Browser unterstützt keine Aufnahme von Tab- oder System-Audio.');
+  }
+
+  const displayStream = await navigator.mediaDevices.getDisplayMedia({
+    video: true,
+    audio: {
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl: false,
+      suppressLocalAudioPlayback: false,
+    },
+    preferCurrentTab: true,
+    selfBrowserSurface: 'include',
+    systemAudio: 'include',
+  });
+
+  const audioTracks = displayStream.getAudioTracks();
+  if (audioTracks.length === 0) {
+    displayStream.getTracks().forEach(track => track.stop());
+    throw new Error('Kein Audio erkannt. Bitte beim Teilen „Tab-Audio/Systemaudio teilen“ aktivieren.');
+  }
+
+  const audioStream = new MediaStream(audioTracks);
+  audioStream._cleanup = () => displayStream.getTracks().forEach(track => track.stop());
+  displayStream.getVideoTracks().forEach(track => {
+    track.addEventListener('ended', () => {
+      audioStream.getTracks().forEach(audioTrack => audioTrack.stop());
+      if (S.recording) stopRecording();
+    }, { once: true });
+  });
+
+  return audioStream;
+}
+
 document.getElementById('btn-new-recording').addEventListener('click', openRecordModal);
+document.querySelectorAll('.record-source-option').forEach(btn => {
+  btn.addEventListener('click', () => setRecordingSource(btn.dataset.source || 'microphone'));
+});
+
+function syncRecordingSourceControls() {
+  document.querySelectorAll('.record-source-option').forEach(btn => {
+    btn.disabled = S.recording;
+  });
+}
+
+function setRecordingSource(source) {
+  if (S.recording) return;
+
+  S.recordingSource = source === 'system' ? 'system' : 'microphone';
+
+  document.querySelectorAll('.record-source-option').forEach(btn => {
+    const selected = btn.dataset.source === S.recordingSource;
+    btn.classList.toggle('selected', selected);
+    btn.setAttribute('aria-pressed', String(selected));
+  });
+
+  const hintEl = document.getElementById('record-source-hint');
+  if (hintEl) {
+    hintEl.textContent = S.recordingSource === 'system'
+      ? 'Browser fragt nach einem Tab/Fenster/Bildschirm. Aktiviere dort „Tab-Audio/Systemaudio teilen“, damit Ton mitgeschnitten wird.'
+      : 'Mikrofonaufnahme mit Pegelanzeige.';
+  }
+}
 
 function openRecordModal() {
   pendingAudioBlob = null;
@@ -543,8 +621,10 @@ function openRecordModal() {
   recLabelEl.textContent   = 'Bereit zum Aufnehmen';
   recLabelEl.className     = '';
   updateRecordingLevel(0);
-  document.querySelector('.record-modal .modal-sub').textContent = 'Drücke den roten Button zum Starten';
+  document.querySelector('.record-modal .modal-sub').textContent = 'Wähle Mikrofon oder System-Audio und starte dann die Aufnahme';
   titleInput.value         = '';
+  setRecordingSource(S.recordingSource);
+  syncRecordingSourceControls();
   modalOverlay.classList.remove('hidden');
 }
 
@@ -566,28 +646,27 @@ btnRecord.addEventListener('click', () => {
 async function startRecording() {
   let stream;
   try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        channelCount: 1,
-        sampleRate: 16000,
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
-      },
-      video: false,
-    });
+    stream = S.recordingSource === 'system'
+      ? await getSystemAudioStream()
+      : await getMicrophoneStream();
   } catch (e) {
-    recLabelEl.textContent = '⚠️ Mikrofon-Zugriff verweigert';
+    const isSystem = S.recordingSource === 'system';
+    recLabelEl.textContent = isSystem
+      ? '⚠️ System-Audio konnte nicht gestartet werden'
+      : '⚠️ Mikrofon-Zugriff verweigert';
     recLabelEl.className   = 'warning';
+    if (e?.message) showBanner(e.message, 'warning');
     return;
   }
 
-  startRecordingLevelMeter(stream);
+  if (S.recordingSource === 'microphone') startRecordingLevelMeter(stream);
+  else updateRecordingLevel(0.18);
 
   audioChunks  = [];
   recStartTime = Date.now();
   shouldSaveRecording = false;
   S.recording  = true;
+  syncRecordingSourceControls();
 
   const mime = RECORDING_MIME_CANDIDATES.find(type => MediaRecorder.isTypeSupported(type));
   const recorderOptions = {
@@ -599,6 +678,7 @@ async function startRecording() {
   mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
   mediaRecorder.onstop = () => {
     stream.getTracks().forEach(t => t.stop());
+    stream._cleanup?.();
     if (!shouldSaveRecording) return; // abgebrochen
     pendingAudioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
     showTitleInput();
@@ -609,7 +689,9 @@ async function startRecording() {
   btnRecord.textContent          = '⏹';
   recLabelEl.textContent         = '● Aufnahme läuft…';
   recLabelEl.className           = 'recording';
-  document.querySelector('.record-modal .modal-sub').textContent = 'Drücke erneut zum Stoppen';
+  document.querySelector('.record-modal .modal-sub').textContent = S.recordingSource === 'system'
+    ? 'Teile einen Tab oder Bildschirm mit Audio und stoppe hier, wenn du fertig bist'
+    : 'Drücke erneut zum Stoppen';
 
   recTimerInterval = setInterval(() => {
     const ms = Date.now() - recStartTime;
@@ -637,6 +719,7 @@ async function stopRecording() {
   mediaRecorder.stop();
   stopRecordingLevelMeter();
   S.recording = false;
+  syncRecordingSourceControls();
 }
 
 function stopMediaRecorderSilent() {
@@ -644,11 +727,12 @@ function stopMediaRecorderSilent() {
     shouldSaveRecording = false;
     S.recording = false;
     clearInterval(recTimerInterval);
-    mediaRecorder.onstop = () => {};
+    mediaRecorder.onstop = () => { mediaRecorder.stream?._cleanup?.(); };
     mediaRecorder.stop();
   }
   stopRecordingLevelMeter();
   S.recording = false;
+  syncRecordingSourceControls();
 }
 
 function updateRecordingLevel(level) {
@@ -702,7 +786,8 @@ function showTitleInput() {
   recPhase.style.display = 'none';
   titlePhase.classList.add('visible');
   const now = new Date();
-  titleInput.value = `Aufnahme ${now.toLocaleDateString('de-DE')} ${now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}`;
+  const prefix = S.recordingSource === 'system' ? 'System-Audio' : 'Aufnahme';
+  titleInput.value = `${prefix} ${now.toLocaleDateString('de-DE')} ${now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}`;
   titleInput.focus();
   titleInput.select();
 }
