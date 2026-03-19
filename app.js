@@ -454,20 +454,50 @@ function resetAudioUI() {
 }
 
 async function getAudioDuration(blob) {
-  try {
-    const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    if (!AudioCtx) return 0;
-    const ctx = new AudioCtx();
-    try {
-      const buffer = await blob.arrayBuffer();
-      const decoded = await ctx.decodeAudioData(buffer.slice(0));
-      return Number.isFinite(decoded.duration) ? decoded.duration : 0;
-    } finally {
-      await ctx.close().catch(() => {});
-    }
-  } catch {
-    return 0;
-  }
+  return new Promise((resolve) => {
+    const tmp = new Audio();
+    const url = URL.createObjectURL(blob);
+    let settled = false;
+
+    const done = (dur) => {
+      if (settled) return;
+      settled = true;
+      tmp.src = '';
+      tmp.load();
+      URL.revokeObjectURL(url);
+      resolve(Number.isFinite(dur) && dur > 0 ? dur : 0);
+    };
+
+    // Webm-Dateien haben oft keinen Duration-Header beim Live-Recording.
+    // Trick: currentTime auf einen sehr großen Wert setzen zwingt den Browser,
+    // die Datei zu scannen und die echte Länge zu ermitteln.
+    tmp.addEventListener('loadedmetadata', () => {
+      if (Number.isFinite(tmp.duration) && tmp.duration > 0 && tmp.duration < Infinity) {
+        done(tmp.duration);
+      } else {
+        tmp.currentTime = 1e101; // seek ans Ende
+      }
+    });
+
+    tmp.addEventListener('timeupdate', function handler() {
+      if (Number.isFinite(tmp.duration) && tmp.duration > 0 && tmp.duration < Infinity) {
+        tmp.removeEventListener('timeupdate', handler);
+        done(tmp.duration);
+      }
+    });
+
+    tmp.addEventListener('durationchange', () => {
+      if (Number.isFinite(tmp.duration) && tmp.duration > 0 && tmp.duration < Infinity) {
+        done(tmp.duration);
+      }
+    });
+
+    tmp.addEventListener('error', () => done(0));
+    setTimeout(() => done(0), 15000);
+
+    tmp.preload = 'metadata';
+    tmp.src = url;
+  });
 }
 
 audioEl.addEventListener('timeupdate', () => {
