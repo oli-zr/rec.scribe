@@ -160,7 +160,26 @@
 <div id="record-modal-overlay" class="modal-overlay hidden">
   <div class="record-modal">
     <h2>Neue Aufnahme</h2>
-    <p class="modal-sub">Drücke den roten Button zum Starten</p>
+    <p class="modal-sub">Wähle Mikrofon oder Laptop-/App-Audio und starte dann die Aufnahme</p>
+
+    <div class="record-source-group" role="radiogroup" aria-label="Audioquelle wählen">
+      <button class="record-source-option selected" id="btn-source-mic" data-source="microphone" aria-pressed="true">
+        <span class="record-source-icon">🎙️</span>
+        <span>
+          <strong>Mikrofon</strong>
+          <small>Für Sprache direkt am Laptop</small>
+        </span>
+      </button>
+      <button class="record-source-option" id="btn-source-system" data-source="system" aria-pressed="false">
+        <span class="record-source-icon">💻</span>
+        <span>
+          <strong>Laptop-/App-Audio</strong>
+          <small>Browser-Tab, YouTube-App, Zoom-App oder ganzer Systemton</small>
+        </span>
+      </button>
+    </div>
+
+    <div id="record-source-hint" class="record-source-hint">Mikrofonaufnahme mit Pegelanzeige.</div>
 
     <div id="record-phase">
       <button id="btn-record">⏺</button>
