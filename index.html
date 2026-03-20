@@ -152,6 +152,16 @@
           </div>
           <input id="audio-seek" type="range" min="0" max="100" value="0" step="0.1">
         </div>
+        <label id="audio-speed-control" for="audio-speed">
+          <span>Tempo</span>
+          <select id="audio-speed" aria-label="Wiedergabegeschwindigkeit">
+            <option value="0.75">0,75x</option>
+            <option value="1" selected>1x</option>
+            <option value="1.25">1,25x</option>
+            <option value="1.5">1,5x</option>
+            <option value="2">2x</option>
+          </select>
+        </label>
       </div>
       <div id="audio-footer">
         <button id="btn-delete-audio">🗑 Audiodatei löschen</button>
@@ -207,6 +217,15 @@
     </div>
 
     <div id="record-source-hint" class="record-source-hint">Mikrofonaufnahme mit Pegelanzeige.</div>
+
+    <div id="microphone-picker" class="hidden">
+      <label for="microphone-select">Mikrofon auswählen</label>
+      <div class="microphone-picker-row">
+        <select id="microphone-select" aria-label="Mikrofon auswählen"></select>
+        <button type="button" class="mbtn ghost microphone-refresh-btn" id="btn-refresh-microphones">Aktualisieren</button>
+      </div>
+      <p id="microphone-picker-hint">Wähle das passende Mikrofon aus, bevor du die Aufnahme startest.</p>
+    </div>
 
     <div id="record-phase">
       <button id="btn-record">⏺</button>

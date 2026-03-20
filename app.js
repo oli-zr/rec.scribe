@@ -22,6 +22,7 @@ const S = {
   sessionFilter: 'all',
   recording:  false,
   recordingSource: 'microphone',
+  microphoneDeviceId: '',
   notesPaneWidth: Number(localStorage.getItem('privatescribe-notes-width')) || null,
 };
 
@@ -140,7 +141,9 @@ async function boot() {
   // Präferenzen laden
   S.modelSize = localStorage.getItem('privatescribe-model') || 'small';
   S.theme = localStorage.getItem('privatescribe-theme') || 'dark';
+  S.microphoneDeviceId = localStorage.getItem('privatescribe-microphone-device-id') || '';
   applyTheme();
+  applyAudioPlaybackRate();
 
   // FSA-Unterstützung prüfen
   if (!fsaSupported()) {
@@ -458,6 +461,7 @@ async function loadAudioPlayer(session) {
   const section = document.getElementById('audio-section');
   audioDurationFallback = 0;
   resetAudioUI();
+  applyAudioPlaybackRate();
   if (!session?.hasAudio) {
     audioEl.pause();
     audioEl.removeAttribute('src');
@@ -499,6 +503,7 @@ const timeEl  = document.getElementById('audio-time');
 const currentTimeEl = document.getElementById('audio-current-time');
 const durationEl = document.getElementById('audio-duration');
 const playEl  = document.getElementById('btn-play-pause');
+const speedEl = document.getElementById('audio-speed');
 
 function getEffectiveAudioDuration() {
   return Number.isFinite(audioEl.duration) && audioEl.duration > 0
@@ -525,6 +530,13 @@ function updateAudioUI(currentTime = 0, duration = 0) {
 function resetAudioUI() {
   playEl.textContent = '▶';
   updateAudioUI(0, 0);
+}
+
+function applyAudioPlaybackRate() {
+  const parsed = Number.parseFloat(localStorage.getItem('privatescribe-playback-rate') || '1');
+  const playbackRate = [0.75, 1, 1.25, 1.5, 2].includes(parsed) ? parsed : 1;
+  audioEl.playbackRate = playbackRate;
+  if (speedEl) speedEl.value = String(playbackRate);
 }
 
 async function getAudioDuration(blob) {
@@ -608,6 +620,11 @@ seekEl.addEventListener('input', () => {
     audioEl.currentTime = nextTime;
     updateAudioUI(nextTime, duration);
   }
+});
+speedEl?.addEventListener('change', () => {
+  const playbackRate = Number.parseFloat(speedEl.value) || 1;
+  audioEl.playbackRate = playbackRate;
+  localStorage.setItem('privatescribe-playback-rate', String(playbackRate));
 });
 
 document.getElementById('btn-delete-audio').addEventListener('click', () => {
@@ -814,6 +831,9 @@ let meterSource = null;
 let meterRAF = null;
 
 const meterFillEl = document.getElementById('record-level-fill');
+const microphonePickerEl = document.getElementById('microphone-picker');
+const microphoneSelectEl = document.getElementById('microphone-select');
+const microphoneHintEl = document.getElementById('microphone-picker-hint');
 
 const RECORDING_MIME_CANDIDATES = [
   'audio/webm;codecs=opus',
@@ -825,6 +845,7 @@ const RECORDING_AUDIO_BITS_PER_SECOND = 24000;
 async function getMicrophoneStream() {
   return navigator.mediaDevices.getUserMedia({
     audio: {
+      ...(S.microphoneDeviceId ? { deviceId: { exact: S.microphoneDeviceId } } : {}),
       channelCount: 1,
       sampleRate: 16000,
       echoCancellation: true,
@@ -862,7 +883,7 @@ async function getSystemAudioStream() {
     throw new Error('Kein Audio erkannt. Bitte beim Teilen „Audio teilen“ oder „Systemaudio teilen“ aktivieren und für Apps das richtige Fenster bzw. den Bildschirm auswählen.');
   }
 
-  const audioStream = new MediaStream(audioTracks);
+  const audioStream = new MediaStream(audioTracks.map(track => track.clone()));
   audioStream._cleanup = () => displayStream.getTracks().forEach(track => track.stop());
   displayStream.getVideoTracks().forEach(track => {
     track.addEventListener('ended', () => {
@@ -883,6 +904,7 @@ function syncRecordingSourceControls() {
   document.querySelectorAll('.record-source-option').forEach(btn => {
     btn.disabled = S.recording;
   });
+  if (microphoneSelectEl) microphoneSelectEl.disabled = S.recording || S.recordingSource !== 'microphone';
 }
 
 function setRecordingSource(source) {
@@ -899,8 +921,69 @@ function setRecordingSource(source) {
   const hintEl = document.getElementById('record-source-hint');
   if (hintEl) {
     hintEl.textContent = S.recordingSource === 'system'
-      ? 'Browser fragt nach einem Tab, Fenster oder Bildschirm. Für YouTube-/Zoom-Apps wähle das jeweilige Fenster oder den ganzen Bildschirm und aktiviere dort „Audio teilen“ bzw. „Systemaudio teilen“.'
+      ? 'Browser fragt nach einem Tab, Fenster oder Bildschirm. Gespeichert wird nur der Audio-Track; ein geteilter Videostream wird nicht in die Aufnahme übernommen.'
       : 'Mikrofonaufnahme mit Pegelanzeige.';
+  }
+
+  microphonePickerEl?.classList.toggle('hidden', S.recordingSource !== 'microphone');
+  syncRecordingSourceControls();
+}
+
+function getFallbackMicrophoneLabel(device, index) {
+  if (!device?.deviceId) return `Standardmikrofon ${index + 1}`;
+  const suffix = device.deviceId.slice(-4).toUpperCase();
+  return `Mikrofon ${index + 1} • ${suffix}`;
+}
+
+async function loadMicrophoneOptions({ requestAccess = false } = {}) {
+  if (!navigator.mediaDevices?.enumerateDevices || !microphoneSelectEl) return;
+
+  let tempStream = null;
+  try {
+    if (requestAccess) {
+      tempStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    }
+
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const microphones = devices.filter(device => device.kind === 'audioinput');
+    microphoneSelectEl.innerHTML = '';
+
+    if (microphones.length === 0) {
+      microphoneSelectEl.innerHTML = '<option value="">Kein Mikrofon gefunden</option>';
+      microphoneSelectEl.disabled = true;
+      if (microphoneHintEl) microphoneHintEl.textContent = 'Es wurde aktuell kein Mikrofon erkannt.';
+      return;
+    }
+
+    microphones.forEach((device, index) => {
+      const option = document.createElement('option');
+      option.value = device.deviceId;
+      option.textContent = device.label || getFallbackMicrophoneLabel(device, index);
+      microphoneSelectEl.appendChild(option);
+    });
+
+    const selectedExists = microphones.some(device => device.deviceId === S.microphoneDeviceId);
+    if (!selectedExists) {
+      S.microphoneDeviceId = microphones[0]?.deviceId || '';
+      localStorage.setItem('privatescribe-microphone-device-id', S.microphoneDeviceId);
+    }
+
+    microphoneSelectEl.value = S.microphoneDeviceId;
+    microphoneSelectEl.disabled = S.recording || S.recordingSource !== 'microphone';
+
+    if (microphoneHintEl) {
+      const hasLabels = microphones.some(device => !!device.label);
+      microphoneHintEl.textContent = hasLabels
+        ? 'Wähle das passende Mikrofon aus, bevor du die Aufnahme startest.'
+        : 'Einige Browser zeigen Mikrofonnamen erst nach Freigabe an. Klicke bei Bedarf auf „Aktualisieren“.';
+    }
+  } catch (error) {
+    console.warn('Mikrofone konnten nicht geladen werden:', error);
+    microphoneSelectEl.innerHTML = '<option value="">Mikrofone konnten nicht geladen werden</option>';
+    microphoneSelectEl.disabled = true;
+    if (microphoneHintEl) microphoneHintEl.textContent = 'Mikrofonliste konnte nicht geladen werden. Prüfe bitte die Browser-Berechtigungen.';
+  } finally {
+    tempStream?.getTracks().forEach(track => track.stop());
   }
 }
 
@@ -919,6 +1002,7 @@ function openRecordModal() {
   setRecordingSource(S.recordingSource);
   syncRecordingSourceControls();
   modalOverlay.classList.remove('hidden');
+  loadMicrophoneOptions();
 }
 
 function closeRecordModal() {
@@ -930,6 +1014,14 @@ function closeRecordModal() {
 
 document.getElementById('btn-cancel-record').addEventListener('click',  closeRecordModal);
 document.getElementById('btn-cancel-title').addEventListener('click',  closeRecordModal);
+document.getElementById('btn-refresh-microphones').addEventListener('click', () => loadMicrophoneOptions({ requestAccess: true }));
+microphoneSelectEl?.addEventListener('change', () => {
+  S.microphoneDeviceId = microphoneSelectEl.value || '';
+  localStorage.setItem('privatescribe-microphone-device-id', S.microphoneDeviceId);
+});
+navigator.mediaDevices?.addEventListener?.('devicechange', () => {
+  if (!modalOverlay.classList.contains('hidden')) loadMicrophoneOptions();
+});
 
 btnRecord.addEventListener('click', () => {
   if (!S.recording) startRecording();
@@ -989,15 +1081,6 @@ async function startRecording() {
   recTimerInterval = setInterval(() => {
     const ms = Date.now() - recStartTime;
     recTimerEl.textContent = fmtDuration(ms);
-
-    const WARN  = (3 * 60 + 45) * 60 * 1000;
-    const MAX   = 4 * 60 * 60 * 1000;
-    if (ms >= WARN && ms < WARN + 2000) {
-      recLabelEl.textContent = '⚠️ Noch 15 Minuten Aufnahmezeit';
-      recLabelEl.className   = 'warning';
-      showBanner('⚠️ Noch 15 Minuten Aufnahmezeit', 'warning');
-    }
-    if (ms >= MAX) stopRecording();
   }, 250);
 }
 
