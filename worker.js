@@ -5,7 +5,7 @@
  */
 import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3/dist/transformers.min.js';
 
-const MODEL_CACHE_DIR_NAME = '.privatescribe-models';
+const MODEL_CACHE_DIR_NAME = '.recscribe-models';
 const CACHE_INDEX_FILENAME = 'cache-index.json';
 
 // Modell-Cache wird standardmäßig über einen benutzerdefinierten Cache im

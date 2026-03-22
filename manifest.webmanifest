@@ -1,6 +1,6 @@
 {
-  "name": "PrivateScribe",
-  "short_name": "PrivateScribe",
+  "name": "RecScribe",
+  "short_name": "RecScribe",
   "description": "Lokale Audioaufnahmen mit Transkription direkt im Browser.",
   "start_url": ".",
   "display": "standalone",

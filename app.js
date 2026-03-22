@@ -1,5 +1,5 @@
 /**
- * app.js – PrivateScribe App – Haupt-Logik
+ * app.js – RecScribe App – Haupt-Logik
  * ES-Modul, kein Build-Schritt nötig.
  * Whisper läuft komplett lokal im Browser via WebAssembly.
  */
@@ -39,7 +39,7 @@ const S = {
   sessionFilter: 'all',
   recording:  false,
   recordingSource: 'microphone',
-  notesPaneWidth: Number(localStorage.getItem('privatescribe-notes-width')) || null,
+  notesPaneWidth: Number(localStorage.getItem('recscribe-notes-width')) || null,
 };
 
 // Hilfsmethoden
@@ -56,15 +56,15 @@ async function getDirForSession(session) {
 
 async function ensureModelCacheDir() {
   if (!S.rootDir) return;
-  await getOrCreateDir(S.rootDir, '.privatescribe-models');
+  await getOrCreateDir(S.rootDir, '.recscribe-models');
   await configureModelCache(S.rootDir);
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 async function boot() {
   // Präferenzen laden
-  S.modelSize = localStorage.getItem('privatescribe-model') || 'small';
-  S.theme = localStorage.getItem('privatescribe-theme') || 'dark';
+  S.modelSize = localStorage.getItem('recscribe-model') || 'small';
+  S.theme = localStorage.getItem('recscribe-theme') || 'dark';
   applyTheme();
 
   // FSA-Unterstützung prüfen
@@ -119,7 +119,7 @@ function updateThemeToggle() {
 
 function toggleTheme() {
   S.theme = S.theme === 'dark' ? 'light' : 'dark';
-  localStorage.setItem('privatescribe-theme', S.theme);
+  localStorage.setItem('recscribe-theme', S.theme);
   applyTheme();
 }
 
@@ -138,7 +138,7 @@ function updateWelcomeModelChoice() {
 document.querySelectorAll('.model-option').forEach(opt => {
   opt.addEventListener('click', () => {
     S.modelSize = opt.dataset.model;
-    localStorage.setItem('privatescribe-model', S.modelSize);
+    localStorage.setItem('recscribe-model', S.modelSize);
     updateWelcomeModelChoice();
     updateModelSelector();
   });
@@ -639,7 +639,7 @@ function setNotesPaneWidth(width, { persist = true } = {}) {
   S.notesPaneWidth = clampedWidth;
   notesColEl.style.width = `${clampedWidth}px`;
   notesColEl.style.flexBasis = `${clampedWidth}px`;
-  if (persist) localStorage.setItem('privatescribe-notes-width', String(Math.round(clampedWidth)));
+  if (persist) localStorage.setItem('recscribe-notes-width', String(Math.round(clampedWidth)));
 }
 
 function applyNotesPaneWidth() {
@@ -1140,7 +1140,7 @@ document.getElementById('btn-model-selector').addEventListener('click', e => {
 document.getElementById('model-dropdown').querySelectorAll('.model-drop-item').forEach(item => {
   item.addEventListener('click', () => {
     S.modelSize = item.dataset.model;
-    localStorage.setItem('privatescribe-model', S.modelSize);
+    localStorage.setItem('recscribe-model', S.modelSize);
     updateModelSelector();
     updateWelcomeModelChoice();
     document.getElementById('model-dropdown').classList.add('hidden');
