@@ -11,6 +11,7 @@ import {
 import { configureModelCache, transcribeAudio, warmUpWorker } from './transcribe.js';
 import {
   isInProgressStatus,
+  isSupportedAudioFile,
   getSessionAudioFilename,
   esc,
   fmtDate,
@@ -176,8 +177,8 @@ importInputEl.addEventListener('change', async e => {
   const file = e.target.files?.[0];
   e.target.value = '';
   if (!file) return;
-  if (!file.type.startsWith('audio/')) {
-    showBanner('Bitte eine gültige Audiodatei auswählen.', 'warning');
+  if (!isSupportedAudioFile(file)) {
+    showBanner('Bitte eine unterstützte Audiodatei auswählen (z. B. m4a, mp3, wav, ogg, webm, aac oder flac).', 'warning');
     return;
   }
   await createSession(file.name.replace(/\.[^.]+$/, ''), file);

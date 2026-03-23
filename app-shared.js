@@ -1,6 +1,15 @@
 export const INDEX_FILENAME = 'index.json';
 export const INDEX_TEMP_FILENAME = 'index.json.tmp';
 export const DEFAULT_AUDIO_FILENAME = 'audio.webm';
+export const SUPPORTED_AUDIO_EXTENSIONS = Object.freeze([
+  '.webm',
+  '.ogg',
+  '.wav',
+  '.mp3',
+  '.m4a',
+  '.aac',
+  '.flac',
+]);
 
 export function isInProgressStatus(status) {
   return ['decoding', 'loading', 'transcribing'].includes(status);
@@ -43,6 +52,18 @@ export function getExtensionFromMimeType(mimeType) {
     'audio/x-flac': '.flac',
   };
   return mimeToExt[normalized] || '.webm';
+}
+
+export function isSupportedAudioFile(audioFile) {
+  if (!(audioFile instanceof File)) return false;
+
+  const normalizedMimeType = audioFile.type.split(';', 1)[0].trim().toLowerCase();
+  if (normalizedMimeType.startsWith('audio/')) return true;
+
+  const match = /\.[^.]+$/.exec(audioFile.name || '');
+  if (!match) return false;
+
+  return SUPPORTED_AUDIO_EXTENSIONS.includes(sanitizeExtension(match[0]));
 }
 
 export function getAudioFilename(audioBlob) {
