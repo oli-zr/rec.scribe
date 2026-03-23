@@ -8,7 +8,7 @@ import {
   getOrCreateDir, writeFile, deleteFile, deleteDir,
 } from './storage.js';
 
-import { configureModelCache, transcribeAudio, warmUpWorker } from './transcribe.js';
+import { configureModelCache, normalizeAudioBlob, transcribeAudio, warmUpWorker } from './transcribe.js';
 import {
   isInProgressStatus,
   getSessionAudioFilename,
@@ -1018,7 +1018,15 @@ async function saveRecording() {
 
 // ── Session erstellen ─────────────────────────────────────────────────────────
 async function createSession(title, audioBlob) {
-  const session = await createSessionRecord(S.rootDir, title, audioBlob);
+  let normalizedBlob = audioBlob;
+
+  try {
+    normalizedBlob = await normalizeAudioBlob(audioBlob);
+  } catch (err) {
+    console.warn('Audio konnte nicht in kompaktes WebM konvertiert werden:', err);
+  }
+
+  const session = await createSessionRecord(S.rootDir, title, normalizedBlob);
 
   S.sessions.unshift(session);
   await saveIndex();
@@ -1028,7 +1036,7 @@ async function createSession(title, audioBlob) {
   renderMainArea();
 
   // Transkription sofort starten
-  runTranscription(session, audioBlob);
+  runTranscription(session, normalizedBlob);
 }
 
 // ── Transkription ausführen ───────────────────────────────────────────────────
